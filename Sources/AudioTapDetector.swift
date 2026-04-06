@@ -18,33 +18,18 @@ struct AudioTapDetector {
     /// Detect the actual audio format being sent to the system output.
     /// Creates a momentary process tap, reads the format, and destroys it.
     static func detectOutputFormat() -> TapFormat? {
-        // Suppress the forced downcast warning
-        @inline(never) func createTap(_ obj: AnyObject) -> (OSStatus, AudioObjectID) {
-            var tapID: AudioObjectID = 0
-            let status = AudioHardwareCreateProcessTap(unsafeBitCast(obj, to: CATapDescription.self), &tapID)
-            return (status, tapID)
-        }
-        guard let tapClass = NSClassFromString("CATapDescription") as? NSObject.Type else {
-            return nil
-        }
-
         // Create a stereo global tap (captures all audio going to output)
-        let tapObj = tapClass.init()
-        guard let tap = tapObj.perform(
-            NSSelectorFromString("initStereoGlobalTapButExcludeProcesses:"),
-            with: [] as NSArray
-        )?.takeUnretainedValue() else {
-            return nil
-        }
+        let tap = CATapDescription(stereoGlobalTapButExcludeProcesses: [])
 
         // Create the process tap
-        let (status, tapID) = createTap(tap)
+        var tapID: AudioObjectID = 0
+        let status = AudioHardwareCreateProcessTap(tap, &tapID)
         guard status == noErr, tapID != 0 else { return nil }
         defer { AudioHardwareDestroyProcessTap(tapID) }
 
         // Read the tap's format: kAudioTapPropertyFormat = 'tfmt' = 0x74666D74
         var address = AudioObjectPropertyAddress(
-            mSelector: 0x74666D74,  // kAudioTapPropertyFormat
+            mSelector: 0x74666D74,
             mScope: kAudioObjectPropertyScopeGlobal,
             mElement: kAudioObjectPropertyElementMain
         )
@@ -55,8 +40,6 @@ struct AudioTapDetector {
             return nil
         }
 
-        // The tap reports 32-bit float (CoreAudio's internal format).
-        // The sample rate is what matters — it reflects what apps are sending.
         guard format.mSampleRate > 0 else { return nil }
 
         return TapFormat(
@@ -67,18 +50,11 @@ struct AudioTapDetector {
     }
 
     /// Map a detected tap sample rate to the likely source bit depth.
-    /// The tap always reports 32-bit float (CoreAudio's mixer format),
-    /// so we infer bit depth from the sample rate family.
     static func inferBitDepth(sampleRate: Float64) -> UInt32 {
-        // Hi-res rates (88.2k+) are almost always 24-bit sources
-        // Standard rates (44.1k, 48k) could be 16 or 24-bit
         switch Int(sampleRate) {
-        case 176400, 192000, 352800, 384000:
-            return 24
-        case 88200, 96000:
-            return 24
-        default:
-            return 16
+        case 176400, 192000, 352800, 384000: return 24
+        case 88200, 96000: return 24
+        default: return 16
         }
     }
 }

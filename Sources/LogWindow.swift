@@ -19,16 +19,16 @@ class LogWindowController: NSObject, NSWindowDelegate {
     }
 
     private func createWindow() {
-        // Window
-        let frame = NSRect(x: 200, y: 200, width: 640, height: 520)
+        // Window — taller to accommodate banner image
+        let frame = NSRect(x: 200, y: 100, width: 640, height: 720)
         window = NSWindow(
             contentRect: frame,
             styleMask: [.titled, .closable, .miniaturizable, .resizable],
             backing: .buffered,
             defer: false
         )
-        window.title = "Heimdall — Lossless Audio Switcher"
-        window.minSize = NSSize(width: 480, height: 300)
+        window.title = "Heimdall — Source Matching Audio Switcher"
+        window.minSize = NSSize(width: 480, height: 400)
         window.delegate = self
         window.isReleasedWhenClosed = false
 
@@ -42,7 +42,60 @@ class LogWindowController: NSObject, NSWindowDelegate {
 
         var y = contentView.bounds.height
 
-        // Status bar at top
+        // Header area: image on left, description on right
+        let headerHeight: CGFloat = 180
+        y -= headerHeight
+        let headerView = NSView(frame: NSRect(x: 0, y: y, width: contentView.bounds.width, height: headerHeight))
+        headerView.autoresizingMask = [.width, .minYMargin]
+        contentView.addSubview(headerView)
+
+        // Banner image — left third
+        let imageWidth: CGFloat = 140
+        let bannerView = NSImageView(frame: NSRect(x: 16, y: 10, width: imageWidth, height: headerHeight - 20))
+        bannerView.imageScaling = .scaleProportionallyUpOrDown
+        bannerView.imageAlignment = .alignCenter
+
+        // Load the banner image — try multiple locations
+        let imagePaths = [
+            Bundle.main.path(forResource: "heimdall_banner", ofType: "png"),
+            Bundle(for: type(of: self)).path(forResource: "heimdall_banner", ofType: "png"),
+            Bundle.main.bundlePath + "/Contents/Resources/heimdall_banner.png",
+            (CommandLine.arguments[0] as NSString).deletingLastPathComponent + "/../Resources/heimdall_banner.png",
+        ]
+        for path in imagePaths.compactMap({ $0 }) {
+            if let img = NSImage(contentsOfFile: path) {
+                bannerView.image = img
+                break
+            }
+        }
+        headerView.addSubview(bannerView)
+
+        // Description text — right of the image
+        let textX = imageWidth + 32
+        let descText = NSTextField(wrappingLabelWithString:
+            "Heimdall guards your music on its way to your DAC.\n\n" +
+            "macOS resamples all audio to a single fixed rate before " +
+            "sending it to your hardware. Apple's own fix is to manually " +
+            "switch the rate in Audio MIDI Setup every time you change " +
+            "tracks \u{2014} tedious. Heimdall does this automatically, " +
+            "matching your DAC to the original source so your music " +
+            "arrives untouched.\n\n" +
+            "Just as Heimdall guards the Bifrost from the frost giants, " +
+            "this app guards your signal path from resampling."
+        )
+        descText.frame = NSRect(x: textX, y: 10, width: contentView.bounds.width - textX - 16, height: headerHeight - 20)
+        descText.autoresizingMask = [.width]
+        descText.font = NSFont.systemFont(ofSize: 11.5, weight: .regular)
+        descText.textColor = NSColor(red: 0.65, green: 0.65, blue: 0.70, alpha: 1.0)
+        descText.isBezeled = false
+        descText.drawsBackground = false
+        descText.isEditable = false
+        descText.isSelectable = false
+        descText.maximumNumberOfLines = 0
+        descText.cell?.truncatesLastVisibleLine = true
+        headerView.addSubview(descText)
+
+        // Status bar below banner
         y -= 70
         let statusBar = NSView(frame: NSRect(x: 0, y: y, width: contentView.bounds.width, height: 70))
         statusBar.autoresizingMask = [.width, .minYMargin]

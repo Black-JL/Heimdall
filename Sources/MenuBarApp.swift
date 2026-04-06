@@ -14,7 +14,7 @@ class MenuBarController: NSObject {
 
         if let button = statusItem.button {
             button.title = "♪"
-            button.toolTip = "Heimdall — Lossless Audio Switcher"
+            button.toolTip = "Heimdall — Source Matching Audio Switcher"
         }
 
         rebuildMenu()
@@ -133,22 +133,18 @@ class MenuBarController: NSObject {
 
     @objc private func showAbout(_ sender: NSMenuItem) {
         let alert = NSAlert()
-        alert.messageText = "Heimdall — Lossless Audio Switcher"
+        alert.messageText = "Heimdall — Source Matching Audio Switcher"
         alert.informativeText = """
         Version 1.0
 
-        In Norse mythology, Heimdall is the guardian of the Bifrost \
-        bridge — the keenest listener among the gods, able to hear \
-        grass growing and see for hundreds of miles.
+        macOS resamples all audio to a single fixed rate before \
+        sending it to your hardware. Apple's own fix is to manually \
+        switch the rate in Audio MIDI Setup every time you change \
+        tracks — tedious. Heimdall does this automatically, matching \
+        your DAC to the original source so your music arrives untouched.
 
-        This app guards the signal path to your DAC. It monitors \
-        what you're playing, detects the native audio format, and \
-        automatically switches your DAC's sample rate to match — \
-        so macOS doesn't resample your music before it reaches \
-        your hardware.
-
-        No resampling. No manual Audio MIDI Setup. Just the \
-        original signal, straight to your DAC.
+        Just as Heimdall guards the Bifrost from the frost giants, \
+        this app guards your signal path from resampling.
 
         github.com/Black-JL/Heimdall
         """

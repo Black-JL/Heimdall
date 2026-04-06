@@ -7,7 +7,7 @@ setlinebuf(stdout)
 // MARK: - Entry Point
 
 print("═══════════════════════════════════════════════")
-print("  Heimdall — Lossless Audio Switcher")
+print("  Heimdall — Source Matching Audio Switcher")
 print("  Auto sample rate matching for external DACs")
 print("═══════════════════════════════════════════════")
 print("")

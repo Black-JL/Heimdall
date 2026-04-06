@@ -8,6 +8,9 @@ let package = Package(
         .executableTarget(
             name: "Heimdall",
             path: "Sources",
+            resources: [
+                .copy("heimdall_banner.png"),
+            ],
             linkerSettings: [
                 .linkedFramework("CoreAudio"),
                 .linkedFramework("AudioToolbox"),
