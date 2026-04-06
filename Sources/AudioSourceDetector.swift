@@ -19,67 +19,111 @@ struct AudioSourceDetector {
         }
     }
 
-    // MARK: - Known streaming service output formats
+    // MARK: - Known audio formats by bundle ID
 
-    private static let streamingFormats: [String: (sampleRate: Float64, bitDepth: UInt32)] = [
-        "spotify": (44100, 16),
-        "youtube": (48000, 16),
-        "youtube music": (48000, 16),
-        "netflix": (48000, 16),
-        "apple tv": (48000, 16),
-        "disney": (48000, 16),
-        "hbo": (48000, 16),
-        "amazon music": (44100, 16),
-        "tidal": (44100, 16),
-        "deezer": (44100, 16),
-        "soundcloud": (44100, 16),
-        "pandora": (44100, 16),
-        "twitch": (48000, 16),
+    /// Apps where we know the output format — keyed by bundle ID prefix.
+    private static let knownAppFormats: [String: (sampleRate: Float64, bitDepth: UInt32)] = [
+        "com.spotify.client": (44100, 16),            // Ogg Vorbis, always 44.1kHz
+        "com.tidal": (44100, 16),                      // Default; MQA would differ
+        "com.amazon.music": (44100, 16),
+        "com.pandora": (44100, 16),
+        "com.soundcloud": (44100, 16),
+        "com.deezer": (44100, 16),
     ]
 
-    private static let browsers = Set(["chrome", "safari", "firefox", "brave", "arc", "edge", "opera", "google chrome", "microsoft edge"])
+    /// Browser bundle IDs
+    private static let browserBundleIDs: Set<String> = [
+        "com.google.Chrome",
+        "com.apple.Safari",
+        "org.mozilla.firefox",
+        "com.brave.Browser",
+        "company.thebrowser.Browser",  // Arc
+        "com.microsoft.edgemac",
+        "com.operasoftware.Opera",
+        "com.vivaldi.Vivaldi",
+    ]
+
+    /// Known streaming service output formats — matched against video/page title
+    private static let streamingServiceFormats: [(pattern: String, sampleRate: Float64, bitDepth: UInt32, label: String)] = [
+        ("youtube", 48000, 16, "YouTube"),
+        ("youtube music", 48000, 16, "YouTube Music"),
+        ("netflix", 48000, 16, "Netflix"),
+        ("disney+", 48000, 16, "Disney+"),
+        ("hbo max", 48000, 16, "HBO Max"),
+        ("apple tv", 48000, 16, "Apple TV+"),
+        ("twitch", 48000, 16, "Twitch"),
+        ("soundcloud", 44100, 16, "SoundCloud"),
+        ("bandcamp", 44100, 16, "Bandcamp"),
+        ("spotify", 44100, 16, "Spotify Web"),
+        ("tidal", 44100, 16, "Tidal"),
+    ]
 
     // MARK: - Main detection entry point
 
-    /// Detect what's currently playing. Uses multiple methods and picks the most
-    /// reliable result. AppleScript player-state checks are ground truth for
-    /// "is this app actually playing right now."
+    /// Detect what's currently playing. Combines multiple methods:
+    /// 1. Core Audio Tap — reads the actual sample rate of audio flowing to output (universal, works for any app)
+    /// 2. AppleScript — identifies which app is playing and gets track names (Spotify, Music.app, VLC)
+    /// 3. MediaRemote Now Playing — catches browsers and other apps
+    /// 4. lsof — finds open audio files for local file players
+    ///
+    /// The tap gives us the TRUE sample rate; app detection gives us the name/context.
     static func detectCurrentAudio() -> AudioInfo? {
-        // Step 1: Check known players via AppleScript (most reliable — verifies playing state)
-        // Run these checks first because they definitively answer "is X playing?"
+        // Step 1: Core Audio Tap — get the actual sample rate of audio flowing to output.
+        // This is ground truth for the sample rate, works for Chrome, YouTube, anything.
+        let tapFormat: TapFormat?
+        if #available(macOS 14.2, *) {
+            tapFormat = AudioTapDetector.detectOutputFormat()
+        } else {
+            tapFormat = nil
+        }
+
+        // Step 2: Identify what's playing (for display purposes + file-based format override)
         var activeSource: AudioInfo?
 
-        // Check Spotify (fast check, known format, very common)
-        if let info = detectFromSpotify() {
-            activeSource = info
+        // Check dedicated music apps via AppleScript (verifies playing state)
+        if let info = detectFromSpotify() { activeSource = info }
+        if activeSource == nil, let info = detectFromMusicApp() { activeSource = info }
+        if activeSource == nil, let info = detectFromVLC() { activeSource = info }
+
+        // Check MediaRemote (catches browsers, other apps)
+        if activeSource == nil, let info = detectViaNowPlaying() { activeSource = info }
+
+        // lsof fallback
+        if activeSource == nil, let info = detectViaOpenFiles() { activeSource = info }
+
+        // Step 3: Combine tap format with app identification
+        if let tap = tapFormat {
+            if let source = activeSource {
+                // For Music.app with local files, trust the file's native format
+                // (the tap may report a different rate if multiple apps are sending audio)
+                // Trust file-based detection over tap when we have a local file's exact format.
+                // The tap can be misleading when multiple apps send audio simultaneously.
+                let hasLocalFileFormat = source.source.contains("Music") || source.source == "VLC"
+                if hasLocalFileFormat && source.sampleRate > 0 {
+                    return source  // File metadata is more accurate for local files
+                }
+
+                // For everything else, use the tap's sample rate (it's what's actually
+                // being sent to the output) but keep the app name from detection
+                return AudioInfo(
+                    sampleRate: tap.sampleRate,
+                    bitDepth: { if #available(macOS 14.2, *) { return AudioTapDetector.inferBitDepth(sampleRate: tap.sampleRate) } else { return 16 } }(),
+                    source: source.source,
+                    trackName: source.trackName
+                )
+            }
+
+            // Tap detected audio but we couldn't identify the app
+            return AudioInfo(
+                sampleRate: tap.sampleRate,
+                bitDepth: { if #available(macOS 14.2, *) { return AudioTapDetector.inferBitDepth(sampleRate: tap.sampleRate) } else { return 16 } }(),
+                source: "System Audio",
+                trackName: nil
+            )
         }
 
-        // Check Music.app — but only prefer it over Spotify if Spotify isn't playing
-        if activeSource == nil, let info = detectFromMusicApp() {
-            activeSource = info
-        }
-
-        // Check VLC
-        if activeSource == nil, let info = detectFromVLC() {
-            activeSource = info
-        }
-
-        // If an AppleScript source was found, trust it — it verified playing state
-        if let source = activeSource {
-            return source
-        }
-
-        // Step 2: MediaRemote Now Playing API (catches browsers, other apps)
-        if let info = detectViaNowPlaying() {
-            return info
-        }
-
-        // Step 3: lsof fallback (finds open audio files — less reliable, can't verify playing)
-        if let info = detectViaOpenFiles() {
-            return info
-        }
-
-        return nil
+        // No tap available — fall back to app-based detection only
+        return activeSource
     }
 
     // MARK: - AppleScript-based detection (ground truth: checks player state)
@@ -182,24 +226,22 @@ struct AudioSourceDetector {
         )
     }
 
-    // MARK: - MediaRemote Now Playing (universal — browsers, other apps)
+    // MARK: - MediaRemote Now Playing (universal — browsers, any app)
 
     static func detectViaNowPlaying() -> AudioInfo? {
-        guard let nowPlaying = NowPlayingDetector.detectViaNowPlaying() else { return nil }
+        guard let info = NowPlayingDetector.getFullNowPlayingInfo() else { return nil }
 
-        let appName = nowPlaying.app
-        let title = nowPlaying.title
+        let bundleID = info.appBundleID
+        let appName = info.appName
+        let title = info.artist.isEmpty ? info.title : "\(info.title) - \(info.artist)"
 
-        // Don't return results for apps we already checked via AppleScript
-        // (they returned nil, meaning they're not playing)
-        let alreadyChecked = ["spotify", "music", "vlc"]
-        if alreadyChecked.contains(where: { appName.lowercased().contains($0) }) {
-            return nil
-        }
+        // Skip apps we already checked via AppleScript (they returned nil = not playing)
+        let alreadyChecked = ["com.apple.Music", "com.spotify.client"]
+        if alreadyChecked.contains(bundleID) { return nil }
 
-        // Known streaming service by app name
-        for (service, format) in streamingFormats {
-            if appName.lowercased().contains(service) {
+        // 1. Known app by bundle ID (exact format known)
+        for (prefix, format) in knownAppFormats {
+            if bundleID.hasPrefix(prefix) {
                 return AudioInfo(
                     sampleRate: format.sampleRate,
                     bitDepth: format.bitDepth,
@@ -209,21 +251,22 @@ struct AudioSourceDetector {
             }
         }
 
-        // Browser-based audio
-        if browsers.contains(where: { appName.lowercased().contains($0) }) {
-            // Check title for streaming service hints
+        // 2. Browser — identify the streaming service from the page/video title
+        if browserBundleIDs.contains(bundleID) {
             let titleLower = title.lowercased()
-            for (service, format) in streamingFormats {
-                if titleLower.contains(service) {
+
+            for service in streamingServiceFormats {
+                if titleLower.contains(service.pattern) {
                     return AudioInfo(
-                        sampleRate: format.sampleRate,
-                        bitDepth: format.bitDepth,
-                        source: "\(appName) (\(service.capitalized))",
+                        sampleRate: service.sampleRate,
+                        bitDepth: service.bitDepth,
+                        source: "\(appName) — \(service.label)",
                         trackName: title
                     )
                 }
             }
-            // Generic browser audio — Web Audio API defaults to 48kHz
+
+            // Generic browser audio (Web Audio API defaults to 48kHz)
             if !title.isEmpty {
                 return AudioInfo(
                     sampleRate: 48000,
@@ -234,9 +277,30 @@ struct AudioSourceDetector {
             }
         }
 
-        // Unknown app with a title — use a safe default
+        // 3. Apple Music (isMusicApp flag but different bundle ID, e.g. streaming)
+        if info.isMusicApp {
+            // Try to get file format via lsof
+            if let fileDetection = NowPlayingDetector.detectViaOpenFiles() {
+                if let fileInfo = readAudioFileFormat(path: fileDetection.path) {
+                    return AudioInfo(
+                        sampleRate: fileInfo.sampleRate,
+                        bitDepth: fileInfo.bitDepth,
+                        source: appName,
+                        trackName: title
+                    )
+                }
+            }
+            // Streaming Apple Music defaults to 44.1kHz AAC (or lossless if enabled)
+            return AudioInfo(
+                sampleRate: 44100,
+                bitDepth: 16,
+                source: appName,
+                trackName: title
+            )
+        }
+
+        // 4. Unknown app — try lsof, then default to 44.1kHz
         if !title.isEmpty {
-            // Try to find an open audio file from this app
             if let fileDetection = NowPlayingDetector.detectViaOpenFiles() {
                 if let fileInfo = readAudioFileFormat(path: fileDetection.path) {
                     return AudioInfo(

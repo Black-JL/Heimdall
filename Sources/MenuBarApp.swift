@@ -98,6 +98,11 @@ class MenuBarController: NSObject {
 
         menu.addItem(NSMenuItem.separator())
 
+        // About
+        let aboutItem = NSMenuItem(title: "About Heimdall", action: #selector(showAbout(_:)), keyEquivalent: "")
+        aboutItem.target = self
+        menu.addItem(aboutItem)
+
         // Quit
         let quitItem = NSMenuItem(title: "Quit Heimdall", action: #selector(quit(_:)), keyEquivalent: "q")
         quitItem.target = self
@@ -124,6 +129,33 @@ class MenuBarController: NSObject {
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
             self?.rebuildMenu()
         }
+    }
+
+    @objc private func showAbout(_ sender: NSMenuItem) {
+        let alert = NSAlert()
+        alert.messageText = "Heimdall — Lossless Audio Switcher"
+        alert.informativeText = """
+        Version 1.0
+
+        In Norse mythology, Heimdall is the guardian of the Bifrost \
+        bridge — the keenest listener among the gods, able to hear \
+        grass growing and see for hundreds of miles.
+
+        This app guards the signal path to your DAC. It monitors \
+        what you're playing, detects the native audio format, and \
+        automatically switches your DAC's sample rate to match — \
+        so macOS doesn't resample your music before it reaches \
+        your hardware.
+
+        No resampling. No manual Audio MIDI Setup. Just the \
+        original signal, straight to your DAC.
+
+        github.com/Black-JL/Heimdall
+        """
+        alert.alertStyle = .informational
+        alert.addButton(withTitle: "OK")
+        alert.window.appearance = NSAppearance(named: .darkAqua)
+        alert.runModal()
     }
 
     @objc private func quit(_ sender: NSMenuItem) {

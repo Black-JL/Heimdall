@@ -127,7 +127,6 @@ class LogWindowController: NSObject, NSWindowDelegate {
 
         // Initial log message
         appendLog("Heimdall started")
-        appendLog("Bit-perfect mode: \(engine.bitPerfectEnabled ? "ON" : "OFF")")
         appendLog("")
     }
 

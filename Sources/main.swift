@@ -51,7 +51,9 @@ if useHogMode {
 
 if cliMode {
     // CLI mode: run in terminal with text output
-    print("Bit-perfect mode: \(engine.bitPerfectEnabled ? "ON" : "OFF")")
+    if engine.bitPerfectEnabled {
+        print("Exclusive mode: ON (hog mode)")
+    }
     print("Running in CLI mode (Ctrl+C to stop)")
     print("")
     engine.start()
