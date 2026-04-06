@@ -192,17 +192,23 @@ Apple's solution — manually opening Audio MIDI Setup and changing the rate for
 
 Heimdall is the lightweight, single-purpose fix: it just matches the rate, for everything, automatically.
 
+## Maintenance
+
+I use Heimdall myself every day, so I'll keep it up to date whenever I have a reason to — if a macOS update breaks something, I'll fix it on my own machine and push the update here. That said, I make no promise, express or implied, to keep this project maintained for anyone else. It's a side project from a college professor, not a commercial product with a support team.
+
+This currently works on macOS only (Apple Silicon and Intel). The code is Swift and relies on Apple's CoreAudio APIs, which don't exist on other platforms. If you're on Linux or Windows and want to adapt this, you're welcome to — the core logic in `AudioMatcher.swift` is platform-agnostic, and `AudioDeviceManager.swift` is where all the macOS-specific calls live.
+
 ## Contributing
 
 - **New audio sources**: Add to the `knownAppFormats` or `streamingServiceFormats` dictionaries in `AudioSourceDetector.swift`
 - **New platforms**: Replace `AudioDeviceManager.swift` with ALSA (Linux) or WASAPI (Windows) implementations
-- **New DACs**: Should work automatically. File an issue if yours isn't detected.
+- **New DACs**: Should work automatically. If yours isn't detected, [open an issue](https://github.com/Black-JL/Heimdall/issues) and include the output of `system_profiler SPAudioDataType` so I can see how your DAC identifies itself.
 
 Pull requests welcome.
 
 ## License
 
-MIT
+MIT — see [LICENSE](LICENSE) for the full text. In short: do whatever you want with this code, but it comes with no warranty. If it breaks your audio setup, that's on you.
 
 ## Credits
 
