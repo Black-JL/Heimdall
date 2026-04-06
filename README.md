@@ -6,9 +6,9 @@
 
 ## The Problem
 
-macOS resamples all audio to a single fixed rate before sending it to your hardware. That rate is whatever you last set in Audio MIDI Setup — and macOS never changes it automatically.
+macOS sends all audio to your external DAC at a single fixed sample rate — whatever you last set in Audio MIDI Setup. It never changes this automatically.
 
-So if your DAC is set to 96 kHz and you play a 44.1 kHz song, macOS upsamples it to 96 kHz before your DAC ever sees it. If your DAC is at 44.1 kHz and you play a 96 kHz hi-res file, macOS downsamples it. Either way, your DAC is converting a signal that's already been converted — it never sees the original.
+macOS is perfectly capable of sending bit-perfect audio over USB or optical to an external DAC, which allows your DAC to work from the actual quality of the original music. But it only does this when the source format happens to match the rate that's already set. The rest of the time, macOS resamples: if your DAC is set to 96 kHz and you play a 44.1 kHz song, macOS upsamples it. If your DAC is at 44.1 kHz and you play a 96 kHz hi-res file, macOS downsamples it. Your DAC ends up converting a signal that's already been converted — and depending on your DAC, that may make a real difference in what you hear.
 
 Apple's own fix ([support.apple.com/en-us/108326](https://support.apple.com/en-us/108326)) is to open Audio MIDI Setup and manually change the rate every time you switch between tracks at different resolutions. That's tedious.
 
