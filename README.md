@@ -175,7 +175,7 @@ In Norse mythology, **Heimdall** is the guardian of the Bifrost bridge — the k
 
 This app stands watch over your audio signal path, ensuring that only the original, unmodified signal reaches your DAC — guarding it from the unnecessary resampling that macOS applies by default.
 
-(And yes — the name is a nod to the Schiit Bifrost DAC that inspired this project.)
+The Norse mythology naming — Heimdall, Bifrost — is a purposeful nod to my preference for and current use of [Schiit Audio](https://www.schiit.com/) products. This project is not affiliated with, endorsed by, or associated with Schiit Audio in any way. To my knowledge, they've never heard of me except as a customer. If Schiit Audio would prefer I not reference their product names, I will change the naming immediately — I have no interest in appearing to represent or speak for their brand.
 
 ## Known Limitations
 
