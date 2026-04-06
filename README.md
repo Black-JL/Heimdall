@@ -1,107 +1,102 @@
-# Heimdall — Lossless Audio Switcher
+# Heimdall — Source Matching Audio Switcher
 
-**Automatic bit-perfect sample rate switching for external DACs on macOS.**
-
-*In Norse mythology, Heimdall is the guardian of the Bifrost bridge — the keenest listener among the gods. This app guards the signal path to your DAC, ensuring only the native audio format crosses the bridge to your headphones.*
+**Automatically matches your external DAC's sample rate to whatever you're playing, so macOS stops resampling your music.**
 
 ---
 
-## Why This Exists
+## The Problem
 
-macOS doesn't change your audio output device's sample rate when you switch between tracks of different resolutions. If your DAC is set to 96 kHz and you play a 44.1 kHz CD-quality track, macOS silently resamples the audio before it reaches your DAC. Your expensive hardware never sees the original signal.
+macOS resamples all audio to a single fixed rate before sending it to your hardware. That rate is whatever you last set in Audio MIDI Setup — and macOS never changes it automatically.
 
-This matters if you have a decent external DAC, a good amp, and good headphones. The DAC's job is digital-to-analog conversion — it should be doing that work, not your computer's built-in resampler. Whether the difference is audible is debatable, but if you've invested in the hardware, you should at least be feeding it the right signal.
+So if your DAC is set to 96 kHz and you play a 44.1 kHz song, macOS upsamples it to 96 kHz before your DAC ever sees it. If your DAC is at 44.1 kHz and you play a 96 kHz hi-res file, macOS downsamples it. Either way, your DAC is converting a signal that's already been converted — it never sees the original.
 
-Heimdall fixes this. It monitors what you're playing, reads the native format, and automatically switches your DAC to match. No resampling. No manual trips to Audio MIDI Setup. Just the original signal, straight to your DAC.
+Apple's own fix ([support.apple.com/en-us/108326](https://support.apple.com/en-us/108326)) is to open Audio MIDI Setup and manually change the rate every time you switch between tracks at different resolutions. That's tedious.
+
+Heimdall does it automatically.
 
 ## What It Does
 
-1. **Auto-detects** your external USB DAC — no configuration needed
-2. **Detects** the native format of whatever audio is currently playing — sample rate and bit depth
-3. **Switches** your DAC's output format to match, using the same CoreAudio APIs as Audio MIDI Setup
-4. **Sets the physical stream format** to match the source bit depth
+Heimdall runs in the background, monitors what you're listening to, detects the native sample rate of the source, and switches your DAC to match — in real time, every time the source changes.
 
-The result: your music files → CoreAudio → your DAC, at the source's native sample rate. No resampling by macOS.
+**44.1 kHz song? DAC switches to 44.1 kHz. 96 kHz hi-res track? DAC switches to 96 kHz. YouTube video at 48 kHz? DAC switches to 48 kHz.**
 
-Optionally, you can enable **Hog Mode** for exclusive device access, which bypasses macOS's audio mixer entirely for a true bit-perfect signal path.
+Your music arrives at the DAC exactly as it was recorded. No resampling. No manual intervention.
+
+### Without Heimdall
+```
+Your Music (44.1 kHz) → macOS Resampler → DAC (locked at 96 kHz)
+                              ↑
+                    Unnecessary conversion
+```
+
+### With Heimdall
+```
+Your Music (44.1 kHz) → Heimdall switches DAC to 44.1 kHz → DAC (44.1 kHz)
+                                                                   ↑
+                                                          Original signal, untouched
+```
+
+## How It Detects the Source Format
+
+Heimdall uses multiple detection methods, prioritized for accuracy:
+
+| Source | How Heimdall Detects It | What It Sends to the DAC |
+|--------|------------------------|--------------------------|
+| **Apple Music (local files)** | Reads the actual file's metadata — sample rate, bit depth, codec | The file's native format (e.g. 24-bit/96 kHz ALAC) |
+| **Apple Music (streaming)** | Reads the cached file's metadata | The stream's native format |
+| **Spotify** | Identifies Spotify as the source via system APIs | 44.1 kHz / 16-bit (Spotify's fixed output) |
+| **YouTube / YouTube Music** | Identifies Chrome/Safari via system APIs | 48 kHz / 16-bit (YouTube's fixed output) |
+| **VLC** | Reads the playing file's metadata | The file's native format |
+| **Any browser audio** | Identifies the browser via system APIs | 48 kHz / 16-bit (Web Audio API default) |
+| **Any other app** | CoreAudio process tap reads the actual system audio format | Whatever format is flowing to the output |
+
+For local files, Heimdall reads the actual audio metadata using Apple's AudioToolbox APIs — `AudioFileOpenURL` and `AudioFileGetProperty` on the `AudioStreamBasicDescription`. This gives the exact native sample rate and bit depth of the recording.
+
+For streaming services and browsers, the output format is fixed regardless of the stream quality (Spotify always outputs 44.1 kHz; YouTube always outputs 48 kHz), so Heimdall applies the correct rate directly.
+
+## Supported DACs
+
+Heimdall **auto-detects** any USB DAC connected to your Mac. It identifies external audio devices by their USB transport type and automatically filters out:
+
+- Built-in speakers and microphones
+- Apple displays (Studio Display, Pro Display XDR)
+- Virtual audio devices (Teams, Zoom, BlackHole, etc.)
+- Bluetooth audio devices
+
+**Tested with:**
+- Schiit Bifrost (original, Unison USB) — 44.1k, 48k, 88.2k, 96k, 176.4k, 192k Hz
+- Should work with any USB Audio Class 2 DAC: Schiit, Topping, SMSL, RME, Chord, iFi, Cambridge, Dragonfly, etc.
+
+When you plug in your DAC, Heimdall finds it automatically. When you unplug it, Heimdall waits quietly until it comes back.
 
 ## Features
 
 - **Automatic sample rate switching** — Matches your DAC to the source: 44.1, 48, 88.2, 96, 176.4, or 192 kHz
-- **Bit-perfect output** — Hog Mode + integer physical format bypasses CoreAudio's mixer and sample rate converter
-- **Works with everything** — Spotify, Apple Music, YouTube Music, VLC, browser audio, and any other audio source
-- **Live activity window** — Color-coded log shows every format switch as it happens
-- **Menu bar controls** — Quick access to manual rate override and bit-perfect toggle
-- **USB hot-plug support** — Detects when your DAC is connected/disconnected and activates automatically
-- **Login item** — Starts automatically when you log in
-- **Zero configuration** — Finds your DAC, starts monitoring, switches rates. That's it.
-
-## Screenshots
-
-When running, Heimdall shows a live log window:
-
-```
-[8:42:15 PM] Heimdall started
-[8:42:15 PM] Connected — Schiit Bifrost Unison USB
-[8:42:15 PM] ✓ Hog mode acquired — exclusive device access (bit-perfect)
-[8:42:17 PM] ▶ Now playing: 16-bit / 44100 Hz [Spotify] — Shadows Understand Me - Hyperbolic Club
-[8:42:17 PM]   ↻ Switching 96000 Hz → 44100 Hz...
-[8:42:17 PM]   ✓ Now at 44100 Hz / 16-bit (bit-perfect)
-[8:42:45 PM] ▶ Now playing: 24-bit / 96000 Hz [Music.app] — Moanin' - Art Blakey
-[8:42:45 PM]   ↻ Switching 44100 Hz → 96000 Hz...
-[8:42:46 PM]   ✓ Now at 96000 Hz / 24-bit (bit-perfect)
-```
-
-The status bar at the top shows your DAC connection, current format, and bit-perfect mode status. A ♪ menu bar icon provides quick access to manual controls.
-
-## Supported DACs
-
-Heimdall **auto-detects** any USB DAC connected to your Mac. It identifies external DACs by their USB transport type and filters out built-in speakers, Apple displays, and virtual audio devices.
-
-Tested with:
-
-- **Schiit Bifrost** (original, Unison USB)
-- Should work with any Schiit DAC (Modi, Gungnir, Yggdrasil, etc.)
-- Should work with any USB Audio Class 2 DAC (Topping, SMSL, RME, Chord, etc.)
-
-If you have multiple external DACs or need to target a specific one:
-
-```bash
-Heimdall --cli --device "Topping D90"
-```
-
-## Supported Audio Sources
-
-| Source | Detection Method | Format |
-|--------|-----------------|--------|
-| Apple Music (local files) | File metadata via lsof + AudioToolbox | Native (e.g. 24-bit/96kHz ALAC) |
-| Apple Music (streaming) | AppleScript + file metadata | Native format of cached file |
-| Spotify | AppleScript / MediaRemote | 44.1 kHz / 16-bit |
-| YouTube Music (browser) | MediaRemote Now Playing | 48 kHz / 16-bit |
-| YouTube (browser) | MediaRemote Now Playing | 48 kHz / 16-bit |
-| VLC | AppleScript + file metadata | Native file format |
-| Any browser audio | MediaRemote Now Playing | 48 kHz / 16-bit |
-| Any other app | MediaRemote Now Playing | 44.1 kHz / 16-bit (default) |
-
-For local files, Heimdall reads the actual audio format metadata (sample rate, bit depth, codec) using Apple's AudioToolbox APIs. For streaming services, it uses known output formats since the audio is decoded to a fixed PCM format regardless of the stream quality.
-
-## Requirements
-
-- macOS 13 (Ventura) or later
-- Apple Silicon or Intel Mac
-- A USB DAC
+- **Source format detection** — Reads actual file metadata for local files; uses known formats for streaming services
+- **Auto-detect any USB DAC** — No configuration needed. Plug in your DAC and Heimdall finds it.
+- **Live activity window** — Shows what's playing, the source format, and every switch as it happens
+- **Menu bar controls** (♪) — Manual rate override if you need it
+- **USB hot-plug support** — Detects DAC connect/disconnect events in real time
+- **Login item** — Can start automatically when you log in
+- **About dialog** — Explains what the app does and why it's named Heimdall
+- **Lightweight** — 250 KB binary. Polls every 2 seconds. Negligible CPU usage.
+- **Open source** — MIT license. Read the code, modify it, contribute to it.
 
 ## Installation
 
-### Quick install
+### DMG Installer (easiest)
+
+Download `Heimdall-1.0.dmg` from [Releases](https://github.com/Black-JL/Heimdall/releases), open it, and drag Heimdall to your Applications folder.
+
+### From source
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/Heimdall.git
+git clone https://github.com/Black-JL/Heimdall.git
 cd Heimdall
 ./install.sh
 ```
 
-This builds the app, copies it to `/Applications`, and adds it as a login item so it starts automatically.
+This builds a release binary, copies it to `/Applications`, and adds it as a login item.
 
 ### Manual build
 
@@ -109,7 +104,7 @@ This builds the app, copies it to `/Applications`, and adds it as a login item s
 swift build -c release
 ```
 
-The binary is at `.build/release/Heimdall`. Run it directly or copy it wherever you like.
+Binary is at `.build/release/Heimdall`.
 
 ### Uninstall
 
@@ -117,91 +112,91 @@ The binary is at `.build/release/Heimdall`. Run it directly or copy it wherever 
 ./uninstall.sh
 ```
 
-Or: quit the app, delete `/Applications/Heimdall.app`, and remove it from System Settings > General > Login Items.
+Or: quit the app, delete it from `/Applications`, remove from System Settings > General > Login Items.
 
 ## Usage
 
 ### As an app (recommended)
 
-Open **Heimdall** from Spotlight (Cmd+Space → "Heimdall") or your Applications folder. You'll see:
+Open Heimdall from Spotlight (**Cmd+Space → "Heimdall"**) or your Applications folder.
 
-- A **log window** with live, color-coded activity
-- A **menu bar icon** (♪) with manual rate controls and a bit-perfect toggle
-- A **dock icon** so you can tell it's running
+You'll see:
+- A **live log window** showing what's playing and when the DAC switches
+- A **menu bar icon** (♪) with your DAC's current rate and manual controls
+- The **Heimdall banner** with a description of what the app does
 
-Just leave it running. It handles everything automatically.
+Leave it running. It handles everything automatically.
 
 ### Command line
 
 ```bash
-# Run with terminal output
+# Terminal output mode
 Heimdall --cli
 
-# Target a specific DAC (default: auto-detect)
+# Target a specific DAC by name
 Heimdall --cli --device "Modi"
 
-# Enable exclusive/hog mode for true bit-perfect output
-# (Note: this takes exclusive control — other apps can't use the DAC)
-Heimdall --cli --hog
-
-# Faster polling (default is 2 seconds)
+# Faster polling
 Heimdall --cli --interval 1.0
+
+# Enable exclusive/hog mode (takes sole control of the DAC)
+Heimdall --cli --hog
 ```
 
-## How It Works
-
-### The macOS Audio Problem
-
-```
-Your Music (44.1kHz) ──→ CoreAudio Mixer ──→ Resampler ──→ DAC (locked at 96kHz)
-                              ↑                    ↑
-                          Float conversion    Sample rate conversion
-                          (loses precision)   (degrades signal)
-```
-
-### With Heimdall
-
-```
-Your Music (44.1kHz) ──→ Heimdall sets DAC to 44.1kHz ──→ DAC (44.1kHz, integer)
-                              ↑                                    ↑
-                          Hog Mode                          No conversion needed
-                          (bypasses mixer)                  (bit-perfect signal)
-```
-
-### Detection Pipeline
-
-1. **MediaRemote API** — Queries macOS's system-wide Now Playing info. Works for Spotify, browsers (YouTube Music, etc.), and most apps without needing special permissions.
-2. **AppleScript** — For Music.app, Spotify, and VLC: verifies the player is actively playing (not just open) and gets track info. Has a timeout to prevent hangs.
-3. **lsof + AudioToolbox** — Finds audio files currently opened by music player processes, then reads native sample rate and bit depth from the file metadata. This is the most accurate method for local files.
-
-### Architecture
+## Architecture
 
 ```
 Sources/
 ├── main.swift                 # Entry point — CLI and GUI modes
-├── AudioDeviceManager.swift   # CoreAudio device control (find, query, switch, hog mode)
-├── AudioMatcher.swift         # Core engine — polling, detection, switching logic (HeimdallEngine)
-├── AudioSourceDetector.swift  # Multi-method audio source format detection
-├── NowPlayingDetector.swift   # MediaRemote API + lsof-based detection
-├── MenuBarApp.swift           # Menu bar UI with controls
-└── LogWindow.swift            # Live activity log window
+├── AudioDeviceManager.swift   # CoreAudio: find DACs, query rates, switch formats
+├── AudioMatcher.swift         # Core engine: poll, detect, switch, debounce
+├── AudioSourceDetector.swift  # Multi-method source format detection
+├── AudioTapDetector.swift     # CoreAudio process tap (macOS 14.2+)
+├── NowPlayingDetector.swift   # MediaRemote API + lsof detection
+├── MenuBarApp.swift           # Menu bar UI
+└── LogWindow.swift            # Live activity window with banner
 ```
+
+### Key CoreAudio APIs Used
+
+| API | What It Does |
+|-----|-------------|
+| `kAudioDevicePropertyNominalSampleRate` | Gets/sets the device's sample rate |
+| `kAudioStreamPropertyPhysicalFormat` | Gets/sets the stream's bit depth and format |
+| `kAudioStreamPropertyAvailablePhysicalFormats` | Queries what formats the DAC supports |
+| `kAudioDevicePropertyTransportType` | Identifies USB vs built-in vs virtual devices |
+| `kAudioHardwarePropertyDevices` | Lists all audio devices; listener detects plug/unplug |
+| `AudioHardwareCreateProcessTap` | Taps system audio to detect the output format (macOS 14.2+) |
+| `AudioFileOpenURL` + `kAudioFilePropertyDataFormat` | Reads native format from audio files |
+
+## The Name
+
+In Norse mythology, **Heimdall** is the guardian of the Bifrost bridge — the keenest listener among the gods, said to be able to hear grass growing and see for hundreds of miles. He stands eternal watch, ensuring that only what belongs crosses the bridge.
+
+This app stands watch over your audio signal path, ensuring that only the original, unmodified signal reaches your DAC — guarding it from the unnecessary resampling that macOS applies by default.
+
+(And yes — the name is a nod to the Schiit Bifrost DAC that inspired this project.)
 
 ## Known Limitations
 
-- **macOS only** — CoreAudio APIs are macOS-specific. Linux (ALSA/PipeWire) and Windows (WASAPI exclusive mode) would need platform-specific implementations.
-- **Hog mode is opt-in and exclusive** — When enabled via `--hog` or the menu bar toggle, only one app can use the DAC. System sounds and notifications won't play through it. This is off by default.
-- **Detection delay** — Heimdall polls every 2 seconds, so there can be a brief moment of wrong-rate audio when switching tracks. This is a deliberate tradeoff — faster polling increases CPU usage for minimal benefit.
-- **Streaming services have fixed formats** — Spotify is always 44.1 kHz, YouTube is always 48 kHz. This is their limitation, not Heimdall's.
-- **AppleScript permissions** — First launch may prompt you to allow Automation access for Music.app and Spotify. Grant it for best detection.
+- **macOS only** — CoreAudio APIs are macOS-specific
+- **Detection has a ~2 second delay** — Heimdall polls every 2 seconds, so there's a brief moment of wrong-rate audio when switching tracks
+- **Streaming services have fixed formats** — Spotify is always 44.1 kHz, YouTube is always 48 kHz, regardless of your subscription tier
+- **First launch may request permissions** — Automation access for Music.app/Spotify, and System Audio Recording for the process tap
+
+## Background
+
+This project started because of a simple annoyance: playing music through a Schiit Bifrost DAC on a Mac, and realizing that macOS was resampling everything to whatever rate happened to be set in Audio MIDI Setup. Switching between a 44.1 kHz Spotify playlist and 96 kHz hi-res FLAC files meant the DAC was almost never receiving the original signal.
+
+Apple's solution — manually opening Audio MIDI Setup and changing the rate for every track — isn't realistic. The existing alternatives are either dead (BitPerfect), Apple Music-only (LosslessSwitcher), or $120+ full-blown music players (Audirvana, Roon) that replace your entire audio workflow.
+
+Heimdall is the lightweight, single-purpose fix: it just matches the rate, for everything, automatically.
 
 ## Contributing
 
-The architecture is designed to be extensible:
-
-- **New audio sources**: Add detection logic to `AudioSourceDetector.swift` or update the `streamingFormats` dictionary
-- **New platforms**: Replace `AudioDeviceManager.swift` with platform-specific audio APIs (ALSA, WASAPI, PipeWire)
-- **New DACs**: Should work out of the box — just use `--device "YourDACName"`
+- **New audio sources**: Add to the `knownAppFormats` or `streamingServiceFormats` dictionaries in `AudioSourceDetector.swift`
+- **New platforms**: Replace `AudioDeviceManager.swift` with ALSA (Linux) or WASAPI (Windows) implementations
+- **New DACs**: Should work automatically. File an issue if yours isn't detected.
 
 Pull requests welcome.
 
@@ -211,6 +206,6 @@ MIT
 
 ## Credits
 
-Built for the audiophile who's tired of opening Audio MIDI Setup every time a song changes.
+Built by a college professor who got tired of opening Audio MIDI Setup.
 
-Named after the Norse god who guards the Bifrost bridge — because your DAC deserves a proper watchman.
+Named after the Norse god who stands eternal watch — because your DAC deserves a proper guardian.
