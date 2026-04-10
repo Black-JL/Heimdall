@@ -24,16 +24,16 @@ Your music arrives at the DAC exactly as it was recorded. No resampling. No manu
 
 ### Without Heimdall
 ```
-Your Music (44.1 kHz) → macOS Resampler → DAC (locked at 96 kHz)
-                              ↑
-                    Unnecessary conversion
+Your Music (96 kHz) → macOS Resampler → DAC (locked at 44.1 kHz)
+                             ↑
+                   Unnecessary downsampling
 ```
 
 ### With Heimdall
 ```
-Your Music (44.1 kHz) → Heimdall switches DAC to 44.1 kHz → DAC (44.1 kHz)
-                                                                   ↑
-                                                          Original signal, untouched
+Your Music (96 kHz) → Heimdall switches DAC to 96 kHz → DAC (96 kHz)
+                                                              ↑
+                                                     Original signal, untouched
 ```
 
 ## The Name
@@ -194,7 +194,7 @@ Heimdall is the lightweight, single-purpose fix: it just matches the rate, for e
 
 ## Maintenance
 
-I use Heimdall myself every day, so I'll keep it up to date whenever I have a reason to — if a macOS update breaks something, I'll fix it on my own machine and push the update here. That said, I make no promise, express or implied, to keep this project maintained for anyone else. It's a side project from a college professor, not a commercial product with a support team.
+I use Heimdall myself every day, so I'll keep it up to date whenever I have a reason to — if a macOS update breaks something, I'll fix it on my own machine and push the update here. That said, I make no promise, express or implied, to keep this project maintained for anyone else. It's a side project, not a commercial product with a support team.
 
 This currently works on macOS only (Apple Silicon and Intel). The code is Swift and relies on Apple's CoreAudio APIs, which don't exist on other platforms. If you're on Linux or Windows and want to adapt this, you're welcome to — the core logic in `AudioMatcher.swift` is platform-agnostic, and `AudioDeviceManager.swift` is where all the macOS-specific calls live.
 
@@ -206,12 +206,16 @@ This currently works on macOS only (Apple Silicon and Intel). The code is Swift 
 
 Pull requests welcome.
 
+## Disclaimer
+
+This software is provided as-is, with no warranty of any kind, express or implied. To my knowledge it is bug-free — it works on my system and I use it daily. However, I have only tested it on my own hardware and software configuration. Anyone who chooses to use Heimdall does so at their own risk. I cannot know or account for every possible system configuration, and I will not be responsible for how it interacts with other people's systems.
+
 ## License
 
 MIT — see [LICENSE](LICENSE) for the full text. In short: do whatever you want with this code, but it comes with no warranty. If it breaks your audio setup, that's on you.
 
 ## Credits
 
-Built by a college professor who got tired of opening Audio MIDI Setup.
+Built by a guy who got tired of opening Audio MIDI Setup.
 
 Named after the Norse god who stands eternal watch — because your DAC deserves a proper guardian.
